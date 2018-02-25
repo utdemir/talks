@@ -1,0 +1,235 @@
+* Nix
+
+** Utku Demir
+*** me@utdemir.com
+
+*** Backend Developer @ Movio
+
+* Problems with package managers
+
+- Build outputs depend on system configuration.
+
+- No interopability between different programming environments.
+
+- Can not install different versions simultaneously. Package conflicts.
+
+* Nix
+
+- A package manager (cabal-install, npm, apt-get, homebrew)
+
+- A build system (make, sh)
+
+- A pure & functional programming language
+
+* How it works
+
+** Nix language
+
+#+BEGIN_SRC nix
+{ stdenv, fetchurl, gnumake, openssl }:
+
+let version = "v42"
+in stdenv.mkDerivation {
+  name = "coolapp-${version}";
+  src = fetchurl {
+    url = "ftp://coolapp.com/coolapp-${version}-linux.tar.gz";
+    sha256 = "0fpjlr3bfind0y94bk442x2p...";
+  };
+  buildInputs = [ gnumake openssl ]
+  buildCommand = ’’
+    ./configure; make
+    mkdir -p $out/bin; cp ./coolapp $out/bin/
+    ’’;
+}
+#+END_SRC
+
+* How it works
+
+** /nix/store
+
+- Store all packages in isolation from each other.
+
+#+BEGIN_SRC bash
+//nix/store//
+  |- 74jh1pacn2mjccj3bm0irl7q26yqprc5-coolapp-v40
+  |- 7wy20jz84kfjv6a2kk3d3nbgnrs4zfsw-coolapp-v42
+  |- 3s5yygaxlzf6l2zn19n5srqwnk8ak88l-coolapp-v42
+#+END_SRC
+
+- Paths contain a cryptographic hash of all inputs used to build the package:
+  - Sources, libraries, compilers, build scripts...
+
+- Forces complete dependencies.
+
+* How it works
+
+** nixpkgs
+
+- A huge collection of Nix expressions, hosted on GitHub.
+
+- Easy to contribute. Many contributors, one of the richest package repositories - I think.
+
+* Demo
+
+* Features
+
+** Parameterized/overridable packages
+
+#+BEGIN_SRC nix
+(emacsWithPackages (epkgs: with epkgs.melpaPackages; [
+  haskell-mode magit
+])
+#+END_SRC
+
+#+BEGIN_SRC nix
+kubernetes.override { components = [ "cmd/kubectl" ]; }
+#+END_SRC
+
+#+BEGIN_SRC nix
+pkgs.haskell.lib.overrideCabal su.opaleye-trans (_: {
+  src = pkgs.fetchFromGitHub {
+    owner = "utdemir"; repo = "opaleye-trans"; rev = "my-fork";
+    sha256 = "0kblfccqs51dj51qiyviwv93mmwg9z90brljqyh9xn464b0k1sb7";
+  };
+});
+#+END_SRC
+
+* Features
+
+** nix-shell
+
+#+BEGIN_SRC haskell
+$ gfortran
+command not found: gfortran
+
+$ nix-shell -p gfortran
+
+nix-shell$ gfortran
+gfortran: fatal error: no input files
+compilation terminated.
+
+nix-shell$ exit
+
+$ gfortran
+command not found: gfortran
+#+END_SRC
+
+* Features
+
+** Create docker images
+
+#+BEGIN_SRC nix
+dockerImage = pkgs.dockerTools.buildImage {
+  name = "backend";
+  tag = "latest";
+  runAsRoot = ''
+    #!${pkgs.stdenv.shell}
+    ${pkgs.dockerTools.shadowSetup}
+  '';
+  contents = [ myApplication ];
+  config = {
+    Entrypoint = "myApplication";
+    ExposedPorts = { "8080/tcp" = {}; };
+  };
+};
+#+END_SRC
+
+
+* Features
+
+** Binary caches
+
+- /nix/store can be served over the network to reduce compilation times.
+
+** Distributed builds
+
+- Since the derivations are pure, the build process can be easily distributed to many machines.
+
+* Ecosystem
+
+** NixOS
+
+- A declarative Linux distribution
+
+#+BEGIN_SRC nix
+{ pkgs, ... }:
+
+{
+  time.timeZone = "Pacific/Auckland";
+  environment.systemPackages = [ pkgs.emacs pkgs.git ];
+  networking.firewall.allowedTCPPorts = [ 22 ];
+  users.extraUsers.utdemir = {
+    home = "/home/utdemir";
+    extraGroups = [ "wheel" "networkmanager" ];
+    shell = "${pkgs.zsh}/bin/zsh";
+  };
+}
+#+END_SRC
+
+* Ecosystem
+
+** NixOS
+
+- Configuration files are hidden behind a nice declarative API.
+
+- Atomic upgrades and rollbacks.
+
+- Share system configurations across machines.
+
+* Ecosystem
+
+** NixOps
+
+- Spawn machines with given configuration on the cloud
+
+#+BEGIN_SRC nix
+{
+  machine1 = { config, pkgs, ... }: {
+    deployment.targetEnv = "ec2";
+    deployment.ec2.region = pkgs.lib.mkDefault "us-east-1";
+    deployment.ec2.instanceType = "t2.large";
+    nginx.enable = true;
+    ...
+  };
+
+  machine2 = { config, pkgs, ... }: {
+    deployment.targetEnv = "azure";
+    deployment.azure = credentials // {
+      location = "westus";
+      size = "Standard_A0"; # minimal size that supports load balancing
+    };
+    memcached.enable = true;
+    ...
+  };
+}
+#+END_SRC
+
+* Ecosystem
+
+** Disnix
+
+- Deploy bunch of services to a set of machines.
+
+- Declare dependencies between services/machines.
+
+- Atomic upgrades and rollbacks.
+
+* Try it out
+
+- Read: https://nixos.org/nixos/nix-pills/index.html
+
+- Use Nix side-by-side with your regular package manager:
+
+#+BEGIN_SRC nix
+curl https://nixos.org/nix/install | sh
+#+END_SRC
+
+- Experiment with nix-env, nix-shell, nix-repl, etc.
+
+- Try out NixOS (e.g. VirtualBox demo appliance)
+
+- Install NixOS
+
+* References
+
+- https://www.slideshare.net/sandervanderburg/vanderburg12-codecentric
