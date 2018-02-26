@@ -1,4 +1,4 @@
-let pkgs = import ../../nixpkgs {};
+let pkgs = import ../../../nixpkgs {};
 in
 pkgs.runCommand "coolapp" {
   buildInputs = [ pkgs.gfortran ];

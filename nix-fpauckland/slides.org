@@ -99,19 +99,23 @@ pkgs.haskell.lib.overrideCabal su.opaleye-trans (_: {
 ** nix-shell
 
 #+BEGIN_SRC haskell
-$ gfortran
-command not found: gfortran
+$ ghci
+command not found: ghci
 
-$ nix-shell -p gfortran
+$ nix-shell -p 'haskellPackages.ghcWithPackages (hp: [ hp.lens ])'
 
-nix-shell$ gfortran
-gfortran: fatal error: no input files
-compilation terminated.
+[nix-shell]$ ghci
+GHCi, version 8.0.2: http://www.haskell.org/ghc/  :? for help
+Prelude> :m +Control.Lens
+Prelude Control.Lens> :t over
+over :: ASetter s t a b -> (a -> b) -> s -> t
+Prelude Control.Lens>
+Leaving GHCi.
 
-nix-shell$ exit
+[nix-shell]$ exit
 
-$ gfortran
-command not found: gfortran
+$ ghci
+command not found: ghci
 #+END_SRC
 
 * Features
