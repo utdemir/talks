@@ -15,9 +15,9 @@
 
 * Nix
 
-- A package manager (cabal-install, npm, apt-get, homebrew)
+- A package manager (like cabal-install, npm, apt-get, homebrew)
 
-- A build system (make, sh)
+- A build system (like make, sh)
 
 - A pure & functional programming language
 
@@ -51,9 +51,9 @@ in stdenv.mkDerivation {
 
 #+BEGIN_SRC bash
 //nix/store//
-  |- 74jh1pacn2mjccj3bm0irl7q26yqprc5-coolapp-v40
-  |- 7wy20jz84kfjv6a2kk3d3nbgnrs4zfsw-coolapp-v42
-  |- 3s5yygaxlzf6l2zn19n5srqwnk8ak88l-coolapp-v42
+  |- 74jh1pacn2mjccj3bm0irl7q26yqprc5-coolapp-v40/
+  |- 7wy20jz84kfjv6a2kk3d3nbgnrs4zfsw-coolapp-v42/
+  |- 3s5yygaxlzf6l2zn19n5srqwnk8ak88l-coolapp-v42/
 #+END_SRC
 
 - Paths contain a cryptographic hash of all inputs used to build the package:
@@ -184,13 +184,12 @@ dockerImage = pkgs.dockerTools.buildImage {
 
 ** NixOps
 
-- Spawn machines with given configuration on the cloud
+- Spawns machines with given configuration on the cloud.
 
 #+BEGIN_SRC nix
 {
   machine1 = { config, pkgs, ... }: {
     deployment.targetEnv = "ec2";
-    deployment.ec2.region = pkgs.lib.mkDefault "us-east-1";
     deployment.ec2.instanceType = "t2.large";
     nginx.enable = true;
     ...
@@ -199,9 +198,7 @@ dockerImage = pkgs.dockerTools.buildImage {
   machine2 = { config, pkgs, ... }: {
     deployment.targetEnv = "azure";
     deployment.azure = credentials // {
-      location = "westus";
-      size = "Standard_A0"; # minimal size that supports load balancing
-    };
+      location = "westus"; size = "Standard_A0"; };
     memcached.enable = true;
     ...
   };
@@ -230,9 +227,7 @@ curl https://nixos.org/nix/install | sh
 
 - Experiment with nix-env, nix-shell, nix-repl, etc.
 
-- Try out NixOS (e.g. VirtualBox demo appliance)
-
-- Install NixOS
+- Try out NixOS
 
 * References
 

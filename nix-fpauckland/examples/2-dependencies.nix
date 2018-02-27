@@ -5,6 +5,7 @@ pkgs.runCommand "coolapp" {
 } ''
   mkdir -p $out/bin/
   gfortran ${./coolapp.f90} -o $out/bin/coolapp
+
   wrapProgram $out/bin/coolapp \
     --prefix PATH : ${pkgs.cowsay}/bin/
 ''

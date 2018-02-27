@@ -1,3 +1,3 @@
 PROGRAM coolapp
-  CALL SYSTEM("cowsay This is coolapp!")
+  CALL SYSTEM("echo This is coolapp!")
 END PROGRAM coolapp
