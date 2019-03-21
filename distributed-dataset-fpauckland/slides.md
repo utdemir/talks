@@ -1,53 +1,67 @@
+
 ---
 title: distributed-dataset
 author: Utku Demir
 date: March 2019, FP Auckland Meetup
+header-includes:
+  - \setbeamersize{text margin left=5mm, text margin right=5mm} 
+---
+
+# distributed-dataset
+
+* A framework to process large amounts of data in a distributed fashion.
+
+* Borrows many ideas from Apache Spark.
+    * Resilient Distributed Dataset (RDD)
+    * Tasks, executors, driver, stages
+    * Differs in some ways:
+        * Short-lived executors - executor per task
+        * More strongly-typed
+        * Composable aggregations
+        * Aims to be self-contained
+        * Written in Haskell
 
 ---
 
-## Why do we distribute data?
+# How?
 
-* Lots of data
-* Arbitrarily complex queries
-* Fault-tolerancy
+* A **Dataset** is a multiset of items.
+* High level operators to transform **Dataset**'s.
+  * map, filter
+  * aggregations (count, average etc.)
+* A **Dataset** consists of many **Partition**s.
+* Each **Partition** can be processed in parallel.
 
-\vspace{5em}
+# In detail
 
-### Why we do **not** distribute data?
+* A **Dataset** is a collection of rows.
+* A Dataset is stored as many **Partition**s.
 
-* Network latency
-* Less flexible
-* Faults
-
----
-
-## How?
-
-* Store a **Dataset** as **Partition**s.
-* Lazily transform this Dataset with functional operators
-  * map, filter, reduce eg.
-* 
-
-\small
 ```haskell
-mkPartition :: Closure (ConduitT () a (ResourceT IO) ()) -> Partition a
-dExternal :: [Partition a] -> Dataset a
+dExternal :: [Partition a] 
+          -> Dataset a
+
+mkPartition :: Closure (ConduitT () a (ResourceT IO) ()) 
+            -> Partition a
+```
+
+---
+
+# In detail
+
+* Lazily transform this Dataset with high level operators
+  * map, filter, reduce eg.
+
+```haskell
 dMap    :: Closure (a -> b) -> Dataset a -> Dataset b
 dFilter :: Closure (a -> Bool) -> Dataset a -> Dataset a
 ```
-
-
-* **Executor**s read/write to partitions
-* **Narrow** operations only operate over one partition
-  * map, filter
-* **Wide** operations require data from multiple partitions
-  * aggregations, joins
-  * expensive, requires coordination
-
 ---
+
 
 # Composable Aggregations
 
+\small
 ```haskell
 data Aggr a b =
   forall t. StaticSerialise t =>
@@ -59,9 +73,97 @@ instance StaticApply (Aggr a)
 instance StaticProfunctor Aggr 
 
 dAggr :: Aggr a b -> Dataset a -> IO b
-dGroupedAggr :: (a -> k) -> Aggr a b 
-             -> Dataset a -> Dataset (k, b)
+dGroupedAggr :: StaticHashable k
+             => Aggr a b 
+             -> Dataset (k, a) 
+             -> Dataset (k, b)
 ```
+
+--- 
+
+# Example
+
+\small
+```haskell
+ ghArchive (fromGregorian 2018 1 1, fromGregorian 2018 12 31)
+   -- :: Dataset GHEvent
+   & dConcatMap (static (\e ->
+       let author = e ^. gheActor . ghaLogin
+           commits = e ^.. gheType . _GHPushEvent 
+                       . ghpepCommits . traverse . ghcMessage
+       in  map (author, ) commits
+     )) 
+   -- :: Dataset [(Text, Text)]
+   & dFilter (static (\(_, commit) ->
+       T.pack "cabal" `T.isInfixOf` T.toLower commit
+     ))
+   -- :: Dataset [(Text, Text)]
+   & dGroupedAggr 50 (static fst) dCount
+   -- :: Dataset [(Text, Int)]
+   & dToList
+   -- :: [(Text, Int)]
+   & sortOn (Down . snd) & take 20 & mapM_ (liftIO . print)
+```
+
+---
+
+
+# Behind the Scenes
+
+\small
+```haskell
+data Dataset a where
+
+  DExternal  :: Typeable a => [Partition a] -> Dataset a
+  
+  DPipe      :: (StaticSerialise a, StaticSerialise b)
+             => Closure (ConduitT a b (ResourceT IO) ())
+             -> Dataset a -> Dataset b
+             
+  DPartition :: (StaticHashable k, StaticSerialise a)
+             => Int
+             -> Closure (a -> k)
+             -> Dataset a -> Dataset a
+```
+
+---
+
+# Behind the Scenes
+
+In order to execute our transforms, we need two things:
+
+* A **Backend** to run remote functions.
+* A **ShuffleStore** to store intermediate outputs.
+
+Both can be supplied externally.
+
+## distributed-dataset-aws
+
+* Provides an AWS Lambda Backend, and an S3 ShuffleStore.
+    * Scales well
+    * No infrastructure necessary
+
+---
+
+# Alternatives in Haskell \small (as I know of)
+
+## Sparkle
+
+> A library for writing resilient analytics applications in Haskell that 
+> scale to thousands of nodes, using Spark and the rest of the Apache ecosystem 
+> under the hood.
+
+## Hadron
+
+> Construct and run Hadoop MapReduce programs in Haskell
+
+## HSpark
+
+> A port of Apache Spark to Haskell using distributed process
+
+## Cloud Haskell
+
+> Erlang-style concurrency in Haskell
 
 # Thanks!
 
@@ -71,28 +173,6 @@ Questions?
 
 # Extras
 
----
-
-# Example
-
-\small
-```haskell
- ghArchive (fromGregorian 2018 1 1, fromGregorian 2018 12 31)
-   & dConcatMap (static (\e ->
-       let author = e ^. gheActor . ghaLogin
-           commits = e ^.. gheType . _GHPushEvent 
-                       . ghpepCommits . traverse . ghcMessage
-       in  map (author, ) commits
-     ))
-   & dFilter (static (\(_, commit) ->
-       T.pack "cabal" `T.isInfixOf` T.toLower commit
-     ))
-   & dMap (static fst)
-   & dGroupedAggr 50 (static id) dCount
-   & dToList
-```
-
----
 
 # An external data source
 
@@ -116,7 +196,7 @@ urlToPartition url' = mkPartition $ (\url -> do
 
 ---
 
-# Aggregation Example
+# How to aggregate
 
 ```haskell
 input & groupedAggr 3 (static getColor) dSum
@@ -138,4 +218,27 @@ input & groupedAggr 3 (static getColor) dSum
   * Partition 1: [$\textcolor{red}{14}$]
   * Partition 2: [$\textcolor{green}{6}$, $\textcolor{black}{1}$]
   * Partition 3: [$\textcolor{blue}{13}$]
+
+---
+
+# Composing Aggr's
+
+\small
+```haskell
+dConstAggr :: (Typeable a, Typeable t)
+           => Closure a -> Aggr t a
+dSum :: StaticSerialise a 
+     => Closure (Dict (Num a)) -> Aggr a a
+
+dCount :: Typeable a => Aggr a Integer
+dCount = 
+  static (const 1) `staticLmap` dSum (static Dict)
+
+dAvg :: Aggr Double Double
+dAvg =
+  dConstAggr (static (/))
+    `staticApply` dSum (static Dict)
+    `staticApply` staticMap (static realToFrac) dCount
+
 ```
+
