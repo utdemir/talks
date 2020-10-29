@@ -1,0 +1,4 @@
+:set -XLinearTypes
+:set -XNoImplicitPrelude
+
+import Prelude.Linear
